@@ -64,6 +64,7 @@ type QuoteProvider interface {
 	Product() *pb.SevProduct
 }
 
+// SVSMQuoteProvider encapsulates calls to collect an extended attestation report from the SVSM.
 type SVSMQuoteProvider interface {
 	QuoteProvider
 	// GetRawQuoteSVSM returns a raw report returned by the SVSM_ATTEST_SERVICES call, as defined in

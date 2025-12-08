@@ -212,6 +212,7 @@ func (p *QuoteProvider) GetRawQuote(reportData [64]byte) ([]uint8, error) {
 	return report, nil
 }
 
+// GetRawQuoteSVSM returns the raw report assigned for given reportData, with a services manifest.
 func (p *QuoteProvider) GetRawQuoteSVSM(reportData [64]byte) ([]uint8, error) {
 	report, err := p.GetRawQuote(reportData)
 	if err != nil {

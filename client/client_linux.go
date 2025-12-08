@@ -264,6 +264,7 @@ func (p *LinuxConfigFsQuoteProvider) GetRawQuote(reportData [64]byte) ([]uint8, 
 	return p.requestReport(reportData, level, "")
 }
 
+// GetRawQuoteSVSM returns byte format attestation, certificate table, and SVSM services manifest via ConfigFS.
 func (p *LinuxConfigFsQuoteProvider) GetRawQuoteSVSM(reportData [64]byte) ([]uint8, error) {
 	var level *report.Privilege
 	if *defaultVMPL != "" {
@@ -314,10 +315,9 @@ func GetLeveledQuoteProvider() (LeveledQuoteProvider, error) {
 	return nil, fmt.Errorf("no supported SEV-SNP LeveledQuoteProvider found")
 }
 
-// GetQuoteProvider returns a supported SVSM QuoteProvider.
+// GetSVSMQuoteProvider returns a supported SVSM QuoteProvider.
 func GetSVSMQuoteProvider() (SVSMQuoteProvider, error) {
-	var provider SVSMQuoteProvider
-	provider = &LinuxConfigFsQuoteProvider{}
+	var provider SVSMQuoteProvider = &LinuxConfigFsQuoteProvider{}
 	if provider.IsSupported() {
 		return provider, nil
 	}

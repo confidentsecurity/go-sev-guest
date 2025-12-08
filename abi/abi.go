@@ -595,6 +595,10 @@ func ReportCertsToProto(data []uint8) (*pb.Attestation, error) {
 	return &pb.Attestation{Report: mreport, CertificateChain: table.Proto()}, nil
 }
 
+// ReportCertsAndManifestToProto creates a pb.Attestation from the report,certificate table, and SVSM
+// services manifest represented in data. The report is expected to take exactly abi.ReportSize bytes,
+// followed by the certificate table and optionally a services manifest. Only reports fetched
+// from SVSM should contain a services manifest.
 func ReportCertsAndManifestToProto(data []uint8) (*pb.Attestation, error) {
 	var certs []uint8
 
@@ -613,13 +617,13 @@ func ReportCertsAndManifestToProto(data []uint8) (*pb.Attestation, error) {
 	}
 
 	var manifest []uint8
+	servicesManifest := new(ServicesManifest)
 	if len(certs) > int(certTable.GetSizeInBytes()) {
 		certs = certs[:certTable.GetSizeInBytes()]
 		manifest = data[ReportSize+len(certs):]
-	}
-	servicesManifest := new(ServicesManifest)
-	if err := servicesManifest.Unmarshal(manifest); err != nil {
-		return nil, err
+		if err := servicesManifest.Unmarshal(manifest); err != nil {
+			return nil, err
+		}
 	}
 
 	return &pb.Attestation{Report: mreport, CertificateChain: certTable.Proto(), ServicesManifest: servicesManifest.Proto()}, nil
@@ -957,6 +961,7 @@ func (c *CertTable) Marshal() []byte {
 	return output
 }
 
+// GetSizeInBytes returns the number of bytes the CertTable will take up in its ABI format.
 func (c *CertTable) GetSizeInBytes() uint32 {
 	headerSize := uint32((len(c.Entries) + 1) * CertTableEntrySize)
 	var dataSize uint32

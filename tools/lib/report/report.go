@@ -131,13 +131,16 @@ func asBin(report *spb.Attestation) ([]byte, error) {
 	}
 	certs := abi.CertsFromProto(report.CertificateChain).Marshal()
 
-	manifest, err := abi.ServicesManifestFromProto(report.ServicesManifest)
-	if err != nil {
-		return nil, err
-	}
-	manifestBytes, err := manifest.Marshal()
-	if err != nil {
-		return nil, err
+	var manifestBytes []byte
+	if report.ServicesManifest != nil {
+		manifest, err := abi.ServicesManifestFromProto(report.ServicesManifest)
+		if err != nil {
+			return nil, err
+		}
+		manifestBytes, err = manifest.Marshal()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	result := make([]byte, 0, len(r)+len(certs)+len(manifestBytes))

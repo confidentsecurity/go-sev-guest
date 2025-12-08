@@ -11,6 +11,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
+// Package abi encapsulates types and status codes from the AMD-SP (AKA PSP) device.
+// abi_svsm.go defines types specific to the SVSM specification.
 package abi
 
 import (
@@ -29,10 +32,7 @@ const (
 )
 
 // GUID as specified in Table 12 of the SVSM specification
-var SERVICES_MANIFEST_GUID = uuid.MustParse("63849ebb-3d92-4670-a1ff-58f9c94b87bb")
-
-// vTPM service attestation GUID found in Section 8.3.1 of the SVSM specification
-var SVSM_ATTEST_VTPM_GUID = uuid.MustParse("c476f1eb-0123-45a5-9641-b4e7dde5bfe3")
+var serviceManifestGUID = uuid.MustParse("63849ebb-3d92-4670-a1ff-58f9c94b87bb")
 
 // ServicesManifest represents the services manifest table, as defined in Section 7.1,
 // table 12 of the Secure VM Service Module for SEV-SNP Guests specification:
@@ -41,6 +41,7 @@ type ServicesManifest struct {
 	Entries []ServiceEntry
 }
 
+// ServiceEntry represents a single entry in the services manifest table.
 type ServiceEntry struct {
 	GUID uuid.UUID
 	Data []byte
@@ -52,13 +53,14 @@ func (t *ServicesManifest) headerSize() uint {
 
 // Returns the number of bytes taken up by the wire ABI representation
 func (t *ServicesManifest) len() uint {
-	var size uint = t.headerSize()
+	var size = t.headerSize()
 	for _, entry := range t.Entries {
 		size += uint(len(entry.Data))
 	}
 	return size
 }
 
+// GetEntry returns the service entry for the given GUID.
 func (t *ServicesManifest) GetEntry(guid uuid.UUID) (ServiceEntry, error) {
 	for _, entry := range t.Entries {
 		if entry.GUID == guid {
@@ -68,12 +70,13 @@ func (t *ServicesManifest) GetEntry(guid uuid.UUID) (ServiceEntry, error) {
 	return ServiceEntry{}, fmt.Errorf("entry not found for GUID %s", guid.String())
 }
 
+// Marshal returns the ServicesManifest in its wire ABI format.
 func (t *ServicesManifest) Marshal() ([]byte, error) {
 	var result bytes.Buffer
 
-	manifestGuidLittleEndian := UUIDToLittleEndian(SERVICES_MANIFEST_GUID)
-	// Write the main header: SERVICES_MANIFEST_GUID | length of table in bytes | number of entries in table
-	err := binary.Write(&result, binary.LittleEndian, manifestGuidLittleEndian)
+	manifestGUIDLittleEndian := uuidToLittleEndian(serviceManifestGUID)
+	// Write the main header: serviceManifestGUID | length of table in bytes | number of entries in table
+	err := binary.Write(&result, binary.LittleEndian, manifestGUIDLittleEndian)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal Services Manifest: %w", err)
 	}
@@ -92,10 +95,10 @@ func (t *ServicesManifest) Marshal() ([]byte, error) {
 
 	// Write header for each entry in the table, which contains:
 	// service GUID | offset of data from start of table | length of data
-	var cursor uint32 = uint32(t.headerSize())
+	var cursor = uint32(t.headerSize())
 	for _, entry := range t.Entries {
-		littleEndianGuid := UUIDToLittleEndian(entry.GUID)
-		err = binary.Write(&result, binary.LittleEndian, littleEndianGuid)
+		littleEndianGUID := uuidToLittleEndian(entry.GUID)
+		err = binary.Write(&result, binary.LittleEndian, littleEndianGUID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal Services Manifest: %w", err)
 		}
@@ -129,26 +132,27 @@ func (t *ServicesManifest) Marshal() ([]byte, error) {
 
 }
 
+// Unmarshal populates a ServicesManifest from its ABI representation.
 func (t *ServicesManifest) Unmarshal(data []byte) error {
 	buf := bytes.NewBuffer(data)
 	totalBytesRead := 0
 
-	var expectedGuidBuf bytes.Buffer
-	err := binary.Write(&expectedGuidBuf, binary.LittleEndian, SERVICES_MANIFEST_GUID)
+	var expectedGUIDBuf bytes.Buffer
+	err := binary.Write(&expectedGUIDBuf, binary.LittleEndian, serviceManifestGUID)
 	if err != nil {
 		return fmt.Errorf("failed to unmarshal Services Manifest: %w", err)
 	}
-	var expectedGuid uuid.UUID
-	expectedGuidBytes := UUIDToLittleEndian(SERVICES_MANIFEST_GUID)
-	copy(expectedGuid[:], expectedGuidBytes)
+	var expectedGUID uuid.UUID
+	expectedGUIDBytes := uuidToLittleEndian(serviceManifestGUID)
+	copy(expectedGUID[:], expectedGUIDBytes)
 
-	// Read the main header: SERVICES_MANIFEST_GUID | length of table in bytes | number of entries in table
+	// Read the main header: serviceManifestGUID | length of table in bytes | number of entries in table
 	var guid uuid.UUID
 	err = binary.Read(buf, binary.LittleEndian, &guid)
 	if err != nil {
 		return fmt.Errorf("failed to unmarshal Services Manifest: %w", err)
 	}
-	if guid != expectedGuid {
+	if guid != expectedGUID {
 		return fmt.Errorf("failed to unmarshal Services Manifest: unexpected GUID: %s", guid.String())
 	}
 	totalBytesRead += int(reflect.TypeOf(guid).Size())
@@ -174,14 +178,14 @@ func (t *ServicesManifest) Unmarshal(data []byte) error {
 	// service GUID | offset of data from start of table | length of data
 	for i := uint32(0); i < numEntries; i++ {
 		var entry ServiceEntry
-		var littleEndianGuid uuid.UUID
-		err := binary.Read(buf, binary.LittleEndian, &littleEndianGuid)
+		var littleEndianGUID uuid.UUID
+		err := binary.Read(buf, binary.LittleEndian, &littleEndianGUID)
 		if err != nil {
 			return fmt.Errorf("failed to unmarshal Services Manifest: %w", err)
 		}
 		totalBytesRead += int(reflect.TypeOf(entry.GUID).Size())
 
-		entry.GUID, err = LittleEndianToUUID(littleEndianGuid[:])
+		entry.GUID, err = littleEndianToUUID(littleEndianGUID[:])
 		if err != nil {
 			return fmt.Errorf("failed to unmarshal Services Manifest: %w", err)
 		}
@@ -223,6 +227,7 @@ func (t *ServicesManifest) Unmarshal(data []byte) error {
 	return nil
 }
 
+// ServicesManifestFromProto creates a ServicesManifest from its protobuf representation.
 func ServicesManifestFromProto(servicesManifest *pb.ServicesManifest) (*ServicesManifest, error) {
 	result := &ServicesManifest{}
 	for _, entry := range servicesManifest.Services {
@@ -235,6 +240,7 @@ func ServicesManifestFromProto(servicesManifest *pb.ServicesManifest) (*Services
 	return result, nil
 }
 
+// Proto returns the protobuf representation of the ServicesManifest.
 func (t *ServicesManifest) Proto() *pb.ServicesManifest {
 	result := &pb.ServicesManifest{}
 	for _, entry := range t.Entries {
@@ -244,7 +250,7 @@ func (t *ServicesManifest) Proto() *pb.ServicesManifest {
 }
 
 // Helper functions for converting UUIDs to and from little-endian format.
-func UUIDToLittleEndian(u uuid.UUID) []byte {
+func uuidToLittleEndian(u uuid.UUID) []byte {
 	result := make([]byte, 16)
 
 	// Copy the original UUID bytes
@@ -266,7 +272,7 @@ func UUIDToLittleEndian(u uuid.UUID) []byte {
 	return result
 }
 
-func LittleEndianToUUID(data []byte) (uuid.UUID, error) {
+func littleEndianToUUID(data []byte) (uuid.UUID, error) {
 	if len(data) != 16 {
 		return uuid.UUID{}, fmt.Errorf("invalid data length: expected 16 bytes, got %d", len(data))
 	}
